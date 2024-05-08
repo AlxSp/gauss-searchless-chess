@@ -303,3 +303,79 @@ sequence, _loss_mask
 
 assert len(sequence) == _sequence_length
 assert len(_loss_mask) == _sequence_length
+
+
+#%%
+# BEHAVIORAL CLONING
+
+
+file_path = "/ubuntu_data/searchless_chess/data/test/behavioral_cloning_data.bag"
+
+bagr = BagReader(file_path)
+
+CODERS = {
+    'fen': coders.StrUtf8Coder(),
+    'move': coders.StrUtf8Coder(),
+    'count': coders.BigIntegerCoder(),
+    'win_prob': coders.FloatCoder(),
+}
+fen, move =  coders.TupleCoder((
+    CODERS['fen'],
+    CODERS['move'],
+)).decode(bagr[0])
+
+#%%
+state = tokenize(fen).astype(np.int32)
+state
+
+#%%
+action = np.asarray([MOVE_TO_ACTION[move]], dtype=np.int32)
+
+#%%
+sequence = np.concatenate([state, action])
+
+_sequence_length = SEQUENCE_LENGTH + 1  # (s) + (a)
+
+_loss_mask = np.full(
+        shape=(_sequence_length,),
+        fill_value=True,
+        dtype=bool,
+    )
+_loss_mask[-1] = False
+
+assert len(sequence) == _sequence_length
+assert len(_loss_mask) == _sequence_length
+
+
+#%%
+file_path = "/ubuntu_data/searchless_chess/data/test/state_value_data.bag"
+
+bagr = BagReader(file_path)
+
+fen, win_prob = coders.TupleCoder((
+    CODERS['fen'],
+    CODERS['win_prob'],
+)).decode(bagr[0])
+
+#%%
+state = tokenize(fen).astype(np.int32)
+state
+
+#%%
+return_bucket = _process_win_prob(win_prob, _return_buckets_edges)
+return_bucket
+
+#%%
+sequence = np.concatenate([state, return_bucket])
+
+_sequence_length = SEQUENCE_LENGTH + 1  # (s) + (r)
+
+_loss_mask = np.full(
+        shape=(_sequence_length,),
+        fill_value=True,
+        dtype=bool,
+    )
+_loss_mask[-1] = False 
+
+assert len(sequence) == _sequence_length
+assert len(_loss_mask) == _sequence_length

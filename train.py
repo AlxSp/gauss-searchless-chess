@@ -26,8 +26,16 @@ train_loader = torch.utils.data.DataLoader(ds, batch_size=1536, shuffle=False)
 # create model
 
 # ~9M model
+if torch.backends.mps.is_available():
+    print("mps")
+    device = torch.device("mps")
+elif torch.cuda.is_available():
+    print("cuda")
+    device = torch.device("cuda")
+else:
+    print("cpu")
+    device = torch.device("cpu")
 
-device = 'cuda'
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 
 

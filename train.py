@@ -13,7 +13,7 @@ from model import BidirectionalPredictor, PredictorConfig
 # create dataset loader
 train_dir = "/ubuntu_data/searchless_chess/data/train"
 
-train_files = [os.path.join(train_dir, f) for f in listdir(train_dir) if isfile(join(train_dir, f))]
+train_files = [os.path.join(train_dir, f) for f in listdir(train_dir) if isfile(join(train_dir, f)) and f.startswith("action_value")]
 
 ds = ActionValueDataset(train_files)
 

@@ -21,7 +21,7 @@ ds = ActionValueDataset(train_files)
 #%%
 # create dataloader
 # FIXME: setting shuffle to True causes OOM error. Need to create own Sampler which stores indices in file?
-train_loader = torch.utils.data.DataLoader(ds, batch_size=2048, shuffle=False, num_workers=4, pin_memory=True)
+train_loader = torch.utils.data.DataLoader(ds, batch_size=2048, shuffle=False, num_workers=0, pin_memory=True)
 
 #%%
 # create model
@@ -39,7 +39,7 @@ print(f"Device: {device_type}")
 
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
 ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
-type_casting = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
+type_casting = nullcontext() if device_type in {'cpu', 'mps'} else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 #output_size = num_return_buckets
 config = PredictorConfig(
@@ -56,9 +56,13 @@ config = PredictorConfig(
 
 model = BidirectionalPredictor(config)
 
-model.to(device)
 
-model = torch.compile(model)
+
+model.to(device)
+if device == "cuda":
+    model = torch.compile(model)
+else:
+    model = torch.compile(model, backend="aot_eager")
 
 #%%
 # init optimizer

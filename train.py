@@ -1,4 +1,5 @@
 #%%
+from contextlib import nullcontext
 from tqdm import tqdm
 import os
 from os import listdir
@@ -20,25 +21,25 @@ ds = ActionValueDataset(train_files)
 #%%
 # create dataloader
 # FIXME: setting shuffle to True causes OOM error. Need to create own Sampler which stores indices in file?
-train_loader = torch.utils.data.DataLoader(ds, batch_size=1536, shuffle=False)
+train_loader = torch.utils.data.DataLoader(ds, batch_size=2048, shuffle=False, num_workers=4, pin_memory=True)
 
 #%%
 # create model
 
 # ~9M model
 if torch.backends.mps.is_available():
-    print("mps")
-    device = torch.device("mps")
+    device_type = 'mps'
 elif torch.cuda.is_available():
-    print("cuda")
-    device = torch.device("cuda")
+    device_type = 'cuda'
 else:
-    print("cpu")
-    device = torch.device("cpu")
+    device_type = 'cpu'
+
+device = torch.device(device_type)
+print(f"Device: {device_type}")
 
 dtype = 'bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16'
-
-
+ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[dtype]
+type_casting = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 #output_size = num_return_buckets
 config = PredictorConfig(
@@ -57,6 +58,8 @@ model = BidirectionalPredictor(config)
 
 model.to(device)
 
+model = torch.compile(model)
+
 #%%
 # init optimizer
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
@@ -69,9 +72,10 @@ count = 0
 loss = None
 
 for sequence, loss_mask in tqdm(train_loader):
-    sequence, loss_mask = sequence.to(device), loss_mask.to(device)
+    sequence, loss_mask = sequence.to(device, non_blocking=True), loss_mask.to(device, non_blocking=True)
     #FIXME: maybe split target from sequence
-    output = model(sequence, attn_mask=loss_mask.unsqueeze(1).unsqueeze(1).bool())
+    with type_casting:
+        output = model(sequence, attn_mask=loss_mask.unsqueeze(1).unsqueeze(1).bool())
     # currently the computed  "target logits" are taken from the computed output of the action input
     value_logits = output[:, -2, :]
     # we only care about the value logits

@@ -283,7 +283,7 @@ class ActionValueDataset(Dataset):
 
         self.length = sum(self.lengths)
 
-        self.sample_sequence_length = SEQUENCE_LENGTH + 2 # (s) + (a) + (r)
+        self.sample_sequence_length = SEQUENCE_LENGTH + 1 # (s) + (a) + (r)
         self.num_return_buckets = 128
 
         self._return_buckets_edges, _ = get_uniform_buckets_edges_values(
@@ -313,14 +313,14 @@ class ActionValueDataset(Dataset):
 
         state = tokenize(fen).astype(np.int32)
         action = np.asarray([MOVE_TO_ACTION[move]], dtype=np.int32)
-        return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)
+        return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)[0]
 
-        sequence = np.concatenate([state, action, return_bucket])
+        sequence = np.concatenate([state, action])
 
         assert len(sequence) == self.sample_sequence_length
-        assert len(self._loss_mask) == self.sample_sequence_length
+        #assert len(self._loss_mask) == self.sample_sequence_length
 
-        return sequence, self._loss_mask
+        return sequence, return_bucket
 
     def __getitem__(self, idx):
         #TODO: add out of bounds check

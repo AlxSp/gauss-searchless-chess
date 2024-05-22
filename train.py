@@ -75,15 +75,16 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
 count = 0
 loss = None
 
-for sequence, loss_mask in tqdm(train_loader):
-    sequence, loss_mask = sequence.to(device, non_blocking=True), loss_mask.to(device, non_blocking=True)
+for sequence, return_bucket in tqdm(train_loader):
+    sequence, return_bucket = sequence.to(device, non_blocking=True), return_bucket.to(device, non_blocking=True)
     #FIXME: maybe split target from sequence
     with type_casting:
-        output = model(sequence, attn_mask=loss_mask.unsqueeze(1).unsqueeze(1).bool())
+        output = model(sequence)
     # currently the computed  "target logits" are taken from the computed output of the action input
     value_logits = output[:, -2, :]
     # we only care about the value logits
-    loss = F.cross_entropy(value_logits, sequence[:, -1])
+
+    loss = F.cross_entropy(value_logits, return_bucket)
 
     scaler.scale(loss).backward()
 

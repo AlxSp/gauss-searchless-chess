@@ -3,9 +3,12 @@
 import os
 import chess
 import torch
+import torch.nn as nn
+from torch.special import erf
+from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from apache_beam import coders
-from torch.utils.data import Dataset, DataLoader
+
 from bagz import BagReader, BagDataSource
 
 #%%
@@ -250,6 +253,29 @@ def get_uniform_buckets_edges_values(
   values = (full_linspace[:-1] + full_linspace[1:]) / 2
   return edges, values
 
+#%%
+class HLGaussLoss(nn.Module):
+  def __init__(self, min_value: float, max_value: float, num_bins: int, sigma: float):
+    super().__init__()
+    self.min_value = min_value
+    self.max_value = max_value
+    self.num_bins = num_bins
+    self.sigma = sigma
+    self.support = torch.linspace(
+    min_value, max_value, num_bins + 1, dtype=torch.float32
+    )
+
+  def transform_to_probs(self, target: torch.Tensor) -> torch.Tensor:
+    cdf_evals = erf(
+    (self.support - target.unsqueeze(-1))
+    / (torch.sqrt(torch.tensor(2.0)) * self.sigma)
+    )
+    z = cdf_evals[..., -1] - cdf_evals[..., 0]
+    bin_probs = cdf_evals[..., 1:] - cdf_evals[..., :-1]
+    return bin_probs / z.unsqueeze(-1)
+
+gauss = HLGaussLoss(0.0, 1.0, 128, 0.96)
+gauss.transform_to_probs(torch.tensor([12]))
 
 #%%
 CODERS = {
@@ -273,9 +299,9 @@ class ActionValueDataset(Dataset):
     The output is a sequence of the 77 states plus the action and return bucket, and the loss mask which attends to the state and action but not the return bucket.
     """
 
-
-    def __init__(self, file_paths):
+    def __init__(self, file_paths, hl_gauss=False):
         self.file_paths = file_paths
+        self.hl_gauss = hl_gauss
 
         self.lengths = []
         for file_path in self.file_paths:
@@ -314,6 +340,10 @@ class ActionValueDataset(Dataset):
         state = tokenize(fen).astype(np.int32)
         action = np.asarray([MOVE_TO_ACTION[move]], dtype=np.int32)
         return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)[0]
+        
+        if self.hl_gauss:
+           hl_gauss = HLGaussLoss(0.0, 1.0, self.num_return_buckets, 0.96)
+           return_bucket = hl_gauss.transform_to_probs(torch.tensor(return_bucket))
 
         sequence = np.concatenate([state, action])
 

@@ -313,7 +313,7 @@ class ActionValueDataset(Dataset):
 
         state = tokenize(fen).astype(np.int32)
         action = np.asarray([MOVE_TO_ACTION[move]], dtype=np.int32)
-        return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)
+        return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)[0]
 
         sequence = np.concatenate([state, action])
 

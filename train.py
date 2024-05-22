@@ -83,7 +83,6 @@ for sequence, return_bucket in tqdm(train_loader):
     # currently the computed  "target logits" are taken from the computed output of the action input
     value_logits = output[:, -2, :]
     # we only care about the value logits
-    return_bucket = torch.flatten(return_bucket)
 
     loss = F.cross_entropy(value_logits, return_bucket)
 

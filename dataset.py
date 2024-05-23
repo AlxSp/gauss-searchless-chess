@@ -254,7 +254,7 @@ def get_uniform_buckets_edges_values(
   return edges, values
 
 #%%
-class HLGaussLoss(nn.Module):
+class ScalarsToHLGauss(nn.Module):
   def __init__(self, min_value: float, max_value: float, num_bins: int, sigma: float):
     super().__init__()
     self.min_value = min_value
@@ -300,7 +300,7 @@ class ActionValueDataset(Dataset):
     def __init__(self, file_paths, hl_gauss=False):
         self.file_paths = file_paths
         self.num_return_buckets = 128
-        self.hl_gauss = HLGaussLoss(0.0, float(self.num_return_buckets), self.num_return_buckets, 0.96)
+        self.hl_gauss = ScalarsToHLGauss(0.0, float(self.num_return_buckets), self.num_return_buckets, 0.96)
 
         self.lengths = []
         for file_path in self.file_paths:

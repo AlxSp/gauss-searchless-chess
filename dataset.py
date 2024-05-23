@@ -274,8 +274,6 @@ class HLGaussLoss(nn.Module):
     bin_probs = cdf_evals[..., 1:] - cdf_evals[..., :-1]
     return bin_probs / z.unsqueeze(-1)
 
-gauss = HLGaussLoss(0.0, 1.0, 128, 0.96)
-gauss.transform_to_probs(torch.tensor([12]))
 
 #%%
 CODERS = {
@@ -301,7 +299,8 @@ class ActionValueDataset(Dataset):
 
     def __init__(self, file_paths, hl_gauss=False):
         self.file_paths = file_paths
-        self.hl_gauss = hl_gauss
+        self.num_return_buckets = 128
+        self.hl_gauss = HLGaussLoss(0.0, float(self.num_return_buckets), self.num_return_buckets, 0.96)
 
         self.lengths = []
         for file_path in self.file_paths:
@@ -310,7 +309,6 @@ class ActionValueDataset(Dataset):
         self.length = sum(self.lengths)
 
         self.sample_sequence_length = SEQUENCE_LENGTH + 1 # (s) + (a) + (r)
-        self.num_return_buckets = 128
 
         self._return_buckets_edges, _ = get_uniform_buckets_edges_values(
             self.num_return_buckets,
@@ -342,8 +340,7 @@ class ActionValueDataset(Dataset):
         return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)[0]
         
         if self.hl_gauss:
-           hl_gauss = HLGaussLoss(0.0, 1.0, self.num_return_buckets, 0.96)
-           return_bucket = hl_gauss.transform_to_probs(torch.tensor(return_bucket))
+           return_bucket = self.hl_gauss.transform_to_probs(torch.tensor(return_bucket))
 
         sequence = np.concatenate([state, action])
 

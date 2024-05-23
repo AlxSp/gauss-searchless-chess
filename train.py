@@ -16,7 +16,7 @@ train_dir = "/ubuntu_data/searchless_chess/data/train"
 
 train_files = [os.path.join(train_dir, f) for f in listdir(train_dir) if isfile(join(train_dir, f)) and f.startswith("action_value")]
 
-ds = ActionValueDataset(train_files)
+ds = ActionValueDataset(train_files, hl_gauss=True)
 
 #%%
 # create dataloader
@@ -83,7 +83,6 @@ for sequence, return_bucket in tqdm(train_loader):
     # currently the computed  "target logits" are taken from the computed output of the action input
     value_logits = output[:, -2, :]
     # we only care about the value logits
-
     loss = F.cross_entropy(value_logits, return_bucket)
 
     scaler.scale(loss).backward()

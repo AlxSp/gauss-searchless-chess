@@ -300,7 +300,7 @@ class ActionValueDataset(Dataset):
     def __init__(self, file_paths, hl_gauss=False):
         self.file_paths = file_paths
         self.num_return_buckets = 128
-        self.hl_gauss = ScalarsToHLGauss(0.0, float(self.num_return_buckets), self.num_return_buckets, 0.96)
+        self.hl_gauss = ScalarsToHLGauss(0.0, float(self.num_return_buckets), self.num_return_buckets, 0.96) if hl_gauss else None
 
         self.lengths = []
         for file_path in self.file_paths:

@@ -11,17 +11,29 @@ from torch.nn import functional as F
 
 from model import BidirectionalPredictor, PredictorConfig
 #%%
+
+#%%
+learning_rate = 1e-4
+
+batch_size = 2048
+
+grad_clip = 1.0
+
+wandb_log = False # set to True to log to wandb
+wandb_project = "gauss-searchless-chess"
+wandb_run_name = "v1"
+
 # create dataset loader
-train_dir = "/ubuntu_data/searchless_chess/data/train"
+train_dir = os.path.join("data", "train")
 
 train_files = [os.path.join(train_dir, f) for f in listdir(train_dir) if isfile(join(train_dir, f)) and f.startswith("action_value")]
 
-ds = ActionValueDataset(train_files, hl_gauss=True)
+train_dataset = ActionValueDataset(train_files, hl_gauss=True)
 
 #%%
 # create dataloader
 # FIXME: setting shuffle to True causes OOM error. Need to create own Sampler which stores indices in file?
-train_loader = torch.utils.data.DataLoader(ds, batch_size=2048, shuffle=False, num_workers=0, pin_memory=True)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
 
 #%%
 # create model
@@ -42,21 +54,19 @@ ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torc
 type_casting = nullcontext() if device_type in {'cpu', 'mps'} else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
 #output_size = num_return_buckets
-config = PredictorConfig(
+model_config = PredictorConfig(
     n_layer = 8,
     n_embd = 256,
     n_head = 8,
     vocab_size = NUM_ACTIONS,
-    output_size = ds.num_return_buckets,
-    block_size = ds.sample_sequence_length,
+    output_size = train_dataset.num_return_buckets,
+    block_size = train_dataset.sample_sequence_length,
     rotary_n_embd = 32,
     dropout = 0.0,
     bias = True,
 )
 
-model = BidirectionalPredictor(config)
-
-
+model = BidirectionalPredictor(model_config)
 
 model.to(device)
 if device == "cuda":
@@ -67,12 +77,28 @@ else:
 #%%
 # init optimizer
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
-grad_clip = 1.0
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
+optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 #%%
-count = 0
+if wandb_log:
+    import wandb
+    wandb.init(
+        project=wandb_project, 
+        name=wandb_run_name, 
+        config=
+            {
+            'train_config': {
+                'batch_size': batch_size,
+                'learning_rate': learning_rate,
+                'grad_clip': grad_clip,
+            },
+            'model_config':  model_config.__dict__ | {"n_params": model.get_num_params()},
+        }
+        )
+
+#%%
+iter_num = 0
 loss = None
 
 for sequence, return_bucket in tqdm(train_loader):
@@ -87,6 +113,12 @@ for sequence, return_bucket in tqdm(train_loader):
 
     scaler.scale(loss).backward()
 
+    if wandb_log:
+        wandb.log({
+            'train/loss': loss.item(),
+        }
+        , step=iter_num * batch_size)
+
     if grad_clip != 0.0:
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -95,4 +127,5 @@ for sequence, return_bucket in tqdm(train_loader):
     scaler.update()
 
     optimizer.zero_grad(set_to_none=True)
-# %%
+
+    iter_num += 1

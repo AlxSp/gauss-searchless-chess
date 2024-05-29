@@ -359,9 +359,9 @@ if __name__ == '__main__':
     from os import listdir
     from os.path import isfile, join
 
-    train_dir = "/ubuntu_data/searchless_chess/data/train"
+    train_dir = os.path.join("data", "train")
 
-    train_files = [os.path.join(train_dir, f) for f in listdir(train_dir) if isfile(join(train_dir, f))]
+    train_files = [os.path.join(train_dir, f) for f in listdir(train_dir) if isfile(join(train_dir, f))  and f.startswith("action_value")]
 
     #%%
     b = BagReader(train_files[0])
@@ -370,7 +370,7 @@ if __name__ == '__main__':
 
 
     #%%
-    ds = ActionValueDataset(train_files)
+    ds = ActionValueDataset(train_files, hl_gauss=True)
     len(ds)
 
     #%%

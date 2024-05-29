@@ -124,6 +124,8 @@ _CHARACTERS = [
     '.',
 ]
 # pyfmt: enable
+BOARD_STATE_VOCAB_SIZE = len(_CHARACTERS)
+
 _CHARACTERS_INDEX = {letter: index for index, letter in enumerate(_CHARACTERS)}
 _SPACES_CHARACTERS = frozenset({'1', '2', '3', '4', '5', '6', '7', '8'})
 SEQUENCE_LENGTH = 77
@@ -297,7 +299,7 @@ class ActionValueDataset(Dataset):
     The output is a sequence of the 77 states plus the action and return bucket, and the loss mask which attends to the state and action but not the return bucket.
     """
 
-    def __init__(self, file_paths, hl_gauss=False):
+    def __init__(self, file_paths, hl_gauss=False, registers = 0):
         self.file_paths = file_paths
         self.num_return_buckets = 128
         self.hl_gauss = ScalarsToHLGauss(0.0, float(self.num_return_buckets), self.num_return_buckets, 0.96) if hl_gauss else None
@@ -308,7 +310,7 @@ class ActionValueDataset(Dataset):
 
         self.length = sum(self.lengths)
 
-        self.sample_sequence_length = SEQUENCE_LENGTH + 1 # (s) + (a) + (r)
+        self.sample_sequence_length = SEQUENCE_LENGTH + 1 + registers # (s) + (a) + (r)
 
         self._return_buckets_edges, _ = get_uniform_buckets_edges_values(
             self.num_return_buckets,
@@ -323,6 +325,16 @@ class ActionValueDataset(Dataset):
 
         self._loss_mask[-1] = False
 
+        self.vocab_size = BOARD_STATE_VOCAB_SIZE + NUM_ACTIONS + registers
+
+        self.action_offset = BOARD_STATE_VOCAB_SIZE
+        self.register_offset = self.action_offset + NUM_ACTIONS
+        self.registers = registers
+
+        self.register_ids = None
+        if registers:
+            self.register_ids = np.arange(self.registers) + self.register_offset
+
     def _get_record_index(self, idx):
         for i, length in enumerate(self.lengths):
             if idx < length:
@@ -336,13 +348,17 @@ class ActionValueDataset(Dataset):
         fen, move, win_prob = action_value_decoder.decode(sample)
 
         state = tokenize(fen).astype(np.int32)
-        action = np.asarray([MOVE_TO_ACTION[move]], dtype=np.int32)
+        action = np.asarray([MOVE_TO_ACTION[move] + BOARD_STATE_VOCAB_SIZE], dtype=np.int32)
         return_bucket = _process_win_prob(win_prob, self._return_buckets_edges)[0]
         
         if self.hl_gauss:
            return_bucket = self.hl_gauss.transform_to_probs(torch.tensor(return_bucket))
 
-        sequence = np.concatenate([state, action])
+        sequence_arr = [state, action]
+        if self.registers:
+            sequence_arr.append(self.register_ids)
+
+        sequence = np.concatenate(sequence_arr)
 
         assert len(sequence) == self.sample_sequence_length
         #assert len(self._loss_mask) == self.sample_sequence_length

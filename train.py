@@ -5,6 +5,7 @@ import os
 from os import listdir
 from os.path import isfile, join
 from dataset import ActionValueDataset, NUM_ACTIONS
+from schedulers import CosineLearningRateScheduler
 
 import torch
 from torch.nn import functional as F
@@ -67,6 +68,14 @@ model_config = PredictorConfig(
 )
 
 model = BidirectionalPredictor(model_config)
+num_epochs = 5,
+bipe_scale = 1.25 # batch iterations per epoch scale
+warmup_steps_ratio = 3
+lr = 0.000625 # 0.001
+start_lr = 0.0002
+final_lr = 1.0e-06
+batch_iterations_per_epoch = len(train_loader)
+
 
 model.to(device)
 if device == "cuda":
@@ -79,6 +88,16 @@ else:
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+lr_scheduler = CosineLearningRateScheduler(
+    optimizer,
+    warmup_steps=int(warmup_steps_ratio*batch_iterations_per_epoch),
+    start_lr=start_lr,
+    ref_lr=lr,
+    final_lr=final_lr,
+    T_max=int(bipe_scale*num_epochs*batch_iterations_per_epoch),
+    step=0 
+)
 
 #%%
 if wandb_log:

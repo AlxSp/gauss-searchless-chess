@@ -24,10 +24,10 @@ data
 
 ## Todo:
 
-- [ ] logging
-- [ ] check if tokenizer is correctly implemented
+- [X] logging
+- [X] check if tokenizer is correctly implemented
 - [ ] save the model and optimizer state
 - [ ] allow resuming from a saved model
 - [ ] test set evaluation
-- [ ] cosine learning rate schedule
+- [X] cosine learning rate schedule
 - [ ] weight decay?

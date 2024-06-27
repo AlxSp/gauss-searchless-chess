@@ -20,6 +20,13 @@ batch_size = 2048
 
 grad_clip = 1.0
 
+num_epochs = 5
+bipe_scale = 1.25 # batch iterations per epoch scale
+warmup_steps_ratio = 3
+lr = 0.000625 # 0.001
+start_lr = 0.0002
+final_lr = 1.0e-06
+
 wandb_log = False # set to True to log to wandb
 wandb_project = "gauss-searchless-chess"
 wandb_run_name = "v1"
@@ -34,7 +41,8 @@ train_dataset = ActionValueDataset(train_files, hl_gauss=True)
 #%%
 # create dataloader
 # FIXME: setting shuffle to True causes OOM error. Need to create own Sampler which stores indices in file?
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=batch_size, shuffle=False, num_workers=0, pin_memory=True)
+batch_iterations_per_epoch = len(train_loader)
 
 #%%
 # create model
@@ -68,14 +76,6 @@ model_config = PredictorConfig(
 )
 
 model = BidirectionalPredictor(model_config)
-num_epochs = 5
-bipe_scale = 1.25 # batch iterations per epoch scale
-warmup_steps_ratio = 3
-lr = 0.000625 # 0.001
-start_lr = 0.0002
-final_lr = 1.0e-06
-batch_iterations_per_epoch = len(train_loader)
-
 
 model.to(device)
 if device == "cuda":
@@ -87,7 +87,7 @@ else:
 # init optimizer
 scaler = torch.cuda.amp.GradScaler(enabled=(dtype == 'float16'))
 
-optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+optimizer = torch.optim.AdamW(model.parameters(), lr=start_lr)
 
 lr_scheduler = CosineLearningRateScheduler(
     optimizer,
@@ -132,9 +132,12 @@ for sequence, return_bucket in tqdm(train_loader):
 
     scaler.scale(loss).backward()
 
+    _new_lr = lr_scheduler.step()
+
     if wandb_log:
         wandb.log({
             'train/loss': loss.item(),
+            'lr': _new_lr
         }
         , step=iter_num * batch_size)
 
@@ -146,5 +149,5 @@ for sequence, return_bucket in tqdm(train_loader):
     scaler.update()
 
     optimizer.zero_grad(set_to_none=True)
-
+    
     iter_num += 1

@@ -68,7 +68,7 @@ model_config = PredictorConfig(
 )
 
 model = BidirectionalPredictor(model_config)
-num_epochs = 5,
+num_epochs = 5
 bipe_scale = 1.25 # batch iterations per epoch scale
 warmup_steps_ratio = 3
 lr = 0.000625 # 0.001

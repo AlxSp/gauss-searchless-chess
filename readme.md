@@ -26,8 +26,8 @@ data
 
 - [X] logging
 - [X] check if tokenizer is correctly implemented
-- [ ] save the model and optimizer state
-- [ ] allow resuming from a saved model
+- [X] save the model and optimizer state
+- [X] allow resuming from a saved model
 - [ ] test set evaluation
 - [X] cosine learning rate schedule
 - [ ] weight decay?

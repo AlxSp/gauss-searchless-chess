@@ -29,7 +29,10 @@ class CosineLearningRateScheduler:
         self.T_max = T_max - warmup_steps
         self.current_step = step
 
-    def step(self):
+    def _update_optimizer_lr(self):
+        """
+        Update the optimizer learning rate based on the current step.
+        """
         if self.current_step < self.warmup_steps:
             progress = float(self.current_step) / float(max(1, self.warmup_steps))
             new_lr = self.start_lr + progress * (self.max_lr - self.start_lr)
@@ -38,9 +41,14 @@ class CosineLearningRateScheduler:
             progress = float(self.current_step - self.warmup_steps) / float(max(1, self.T_max))
             new_lr = max(self.final_lr,
                          self.final_lr + (self.max_lr - self.final_lr) * 0.5 * (1. + math.cos(math.pi * progress)))
-
+            
         for group in self.optimizer.param_groups:
             group['lr'] = new_lr
+
+        return new_lr
+
+    def step(self):
+        new_lr = self._update_optimizer_lr()
 
         self.current_step += 1
         return new_lr

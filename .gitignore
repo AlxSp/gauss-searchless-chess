@@ -1,8 +1,10 @@
 # Project files and directories
 data/
 !data/download.sh
-
+# Logging directory 
 wandb/
+# Model training output directory
+out/
 # Environment files
 .python-version
 

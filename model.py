@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import json
 import math
 import torch
 import torch.nn as nn
@@ -116,6 +117,12 @@ class PredictorConfig:
 
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better
+
+    @classmethod
+    def from_json(cls, path):
+        with open(path, 'r') as f:
+            data = json.load(f)
+        return cls(**data)
 
 #%%
 class BidirectionalPredictor(nn.Module):

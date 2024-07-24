@@ -18,14 +18,15 @@ from model import BidirectionalPredictor, PredictorConfig
 
 #%%
 init_from = "scratch" # set to "resume" to resume training from a saved model, set to "scratch" to start training from scratch
-resume_src = "train"
+resume_src = "train" # set to "train" to resume training from the last training checkpoint, set to "eval" to resume training from the best evaluation checkpoint
 
 assert init_from in {"resume", "scratch"}, "init_from must be either 'resume' or 'scratch'"
 assert resume_src in {"train", "eval"}, "you must decide where to restart from 'train' or 'eval'"
 
 additional_token_registers = 2 # additional tokens that will be added to the model input
 train_save_interval = 20
-test_interval = 20
+test_interval = 200
+
 num_epochs = 1
 batch_size = 2048
 
@@ -37,6 +38,8 @@ final_lr = 1.0e-06
 grad_clip = 1.0
 
 random_seed = 42
+
+dataloader_workers = 4
 
 wandb_log = False #True # set to True to log to wandb
 wandb_project = "gauss-searchless-chess"
@@ -50,13 +53,15 @@ os.makedirs(output_dir, exist_ok=True)
 model_config_path = os.path.join(output_dir, "model_config.json")
 
 train_model_dir = os.path.join("out", "train")
-eval_model_dir = os.path.join("out", "eval")
 os.makedirs(train_model_dir, exist_ok=True)
-os.makedirs(eval_model_dir, exist_ok=True)
 
 train_model_path = os.path.join(train_model_dir, "model.pt")
 train_optimizer_path = os.path.join(train_model_dir, "optimizer.pt")
 train_state_path = os.path.join(train_model_dir, "train_state.json")
+
+eval_model_dir = os.path.join("out", "eval")
+os.makedirs(eval_model_dir, exist_ok=True)
+
 eval_model_path = os.path.join(eval_model_dir, "model.pt")
 eval_optimizer_path = os.path.join(eval_model_dir, "optimizer.pt")
 eval_state_path = os.path.join(eval_model_dir, "eval_state.json")
@@ -103,17 +108,19 @@ if init_from == "scratch":
     with open(model_config_path, "w") as f:
         json.dump(model_config.__dict__, f, indent=2)
     train_state = {}
+
 elif init_from == "resume":
     if resume_src == "train":
+        print("Resuming from last training checkpoint")
         model_path = train_model_path
         state_path = train_state_path
         optimizer = train_optimizer_path
     elif resume_src == "eval":
+        print("Resuming from best evaluation checkpoint")
         model_path = eval_model_path
         state_path = eval_state_path
         optimizer_path = eval_optimizer_path
     
-    print("Resuming training")
     if os.path.exists(model_path):
         train_model_config = PredictorConfig.from_json(model_config_path)
         # load model
@@ -184,11 +191,10 @@ train_sampler = ResumableSampler(
 
 # create dataloader
 # FIXME: setting shuffle to True causes OOM error. Need to create own Sampler which stores indices in file?
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_sampler = train_sampler, num_workers=0, pin_memory=True)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_sampler = train_sampler, num_workers=dataloader_workers, pin_memory=True)
 train_loader_iter = iter(train_loader)
 
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, num_workers=0, pin_memory=True)
-#test_loader_iter = iter(test_loader)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=batch_size, num_workers=dataloader_workers, pin_memory=True)
 
 max_iter_num = num_epochs * train_sampler.batch_iterations_per_epoch
 
@@ -268,7 +274,7 @@ while iter_num < max_iter_num:
     mean_eval_loss = 0
     if (iter_num + 1) % test_interval == 0:
         with torch.no_grad():
-            for sequence, return_bucket in test_loader:
+            for sequence, return_bucket in tqdm(test_loader, leave = False, desc="Evaluating"):
                 sequence, return_bucket = sequence.to(device, non_blocking=True), return_bucket.to(device, non_blocking=True)
                 #FIXME: maybe split target from sequence
                 with type_casting:
@@ -277,17 +283,21 @@ while iter_num < max_iter_num:
                 value_logits = output[:, -1, :]
                 # we only care about the value logits
                 mean_eval_loss += F.cross_entropy(value_logits, return_bucket)
-            mean_eval_loss /= len(test_loader)
+            
+        mean_eval_loss /= len(test_loader)
+        mean_eval_loss = mean_eval_loss.item()
 
-            if mean_eval_loss < best_eval_loss:
-                torch.save(save_model.state_dict(), eval_model_path)
-                torch.save(optimizer.state_dict(), eval_optimizer_path)
-                train_state = {
-                    'iter_num' : iter_num,
-                    'best_eval_loss' : mean_eval_loss
-                }
-                with open(eval_state_path, "w") as f:
-                    json.dump(train_state, f, indent=2)
+        if mean_eval_loss < best_eval_loss:
+            best_eval_loss = mean_eval_loss
+
+            torch.save(save_model.state_dict(), eval_model_path)
+            torch.save(optimizer.state_dict(), eval_optimizer_path)
+            train_state = {
+                'iter_num' : iter_num,
+                'best_eval_loss' : mean_eval_loss
+            }
+            with open(eval_state_path, "w") as f:
+                json.dump(train_state, f, indent=2)
                 
     
         if wandb_log:
@@ -306,4 +316,4 @@ while iter_num < max_iter_num:
 
     iter_num += 1
     p_bar.update(1)
-# %%
+

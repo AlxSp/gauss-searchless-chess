@@ -25,7 +25,7 @@ assert resume_src in {"train", "eval"}, "you must decide where to restart from '
 
 additional_token_registers = 2 # additional tokens that will be added to the model input
 train_save_interval = 20
-test_interval = 200
+eval_interval = 200
 
 num_epochs = 1
 batch_size = 2048
@@ -272,7 +272,7 @@ while iter_num < max_iter_num:
             json.dump(train_state, f, indent=2)
     
     mean_eval_loss = 0
-    if (iter_num + 1) % test_interval == 0:
+    if (iter_num + 1) % eval_interval == 0:
         with torch.no_grad():
             for sequence, return_bucket in tqdm(test_loader, leave = False, desc="Evaluating"):
                 sequence, return_bucket = sequence.to(device, non_blocking=True), return_bucket.to(device, non_blocking=True)

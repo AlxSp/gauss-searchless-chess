@@ -3,6 +3,9 @@
 Pytorch implementation of the papers [Grandmaster-Level Chess Without Search](https://arxiv.org/pdf/2402.04494) and [Stop Regressing: Training Value Functions via
 Classification for Scalable Deep RL](https://arxiv.org/pdf/2403.03950). A chess model is trained to predict the action value of a given board state and action by converting the value target to a Gaussian distribution and using categorical cross-entropy loss.
 
+## Authors Notes:
+While constructing our version of Searchless Chess we found what we believed to be an error in the original tokenization. Specifically, we found that the board state and the action values overlapped by the number of board state values. Thus, in this implementation the dataset generation corrects for this by making all board state and action value tokens unique. 
+
 ## Setup:
 
 Clone the repository:
